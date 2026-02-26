@@ -10,7 +10,7 @@ import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
@@ -19,6 +19,8 @@ from langchain_core.messages import AIMessage
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.language_models.chat_models import BaseChatModel
 
 # Best-effort import for a console/stdout callback handler across LangChain versions
 try:  # langchain <=0.1 style
@@ -232,6 +234,7 @@ class BaseAgent:
         base_delay: float = 0.5,
         openai_base_url: Optional[str] = None,
         openai_api_key: Optional[str] = None,
+        vertex_api_key: Optional[str] = None,
         initial_cash: float = 10000.0,
         init_date: str = "2025-10-13",
         market: str = "us",
@@ -295,11 +298,15 @@ class BaseAgent:
             self.openai_api_key = os.getenv("OPENAI_API_KEY")
         else:
             self.openai_api_key = openai_api_key
+        if vertex_api_key == None:
+            self.vertex_api_key = os.getenv("VERTEX_API_KEY")
+        else:
+            self.vertex_api_key = vertex_api_key
 
         # Initialize components
         self.client: Optional[MultiServerMCPClient] = None
         self.tools: Optional[List] = None
-        self.model: Optional[ChatOpenAI] = None
+        self.model: Optional[BaseChatModel] = None
         self.agent: Optional[Any] = None
 
         # Data paths
@@ -340,15 +347,15 @@ class BaseAgent:
             except Exception:
                 pass
             print("🔍 LangChain verbose mode enabled (with debug)")
-
-        # Validate OpenAI configuration
-        if not self.openai_api_key:
-            raise ValueError(
-                "❌ OpenAI API key not set. Please configure OPENAI_API_KEY in environment or config file."
-            )
-        if not self.openai_base_url:
-            print("⚠️  OpenAI base URL not set, using default")
-
+# ------------------------------------------
+        # # Validate OpenAI configuration
+        # if not self.openai_api_key:
+        #     raise ValueError(
+        #         "❌ OpenAI API key not set. Please configure OPENAI_API_KEY in environment or config file."
+        #     )
+        # if not self.openai_base_url:
+        #     print("⚠️  OpenAI base URL not set, using default")
+# ------------------------------------------
         try:
             # Create MCP client
             self.client = MultiServerMCPClient(self.mcp_config)
@@ -386,6 +393,14 @@ class BaseAgent:
                     api_key=self.openai_api_key,
                     max_retries=3,
                     timeout=30,
+                )
+            elif "gemini" in self.basemodel.lower():
+                self.model = ChatGoogleGenerativeAI(
+                    model=self.basemodel,
+                    google_api_key=self.vertex_api_key,
+                    temperature=0,
+                    vertexai=True,
+                    timeout=60,
                 )
             else:
                 self.model = ChatOpenAI(
@@ -495,7 +510,20 @@ class BaseAgent:
 
                 # Extract tool messages
                 tool_msgs = extract_tool_messages(response)
-                tool_response = "\n".join([msg.content for msg in tool_msgs])
+                extracted_contents = []
+                for msg in tool_msgs:
+                    if msg.content is None:
+                        continue
+                    
+                    # Check if content is a list (new format) or a string (old format)
+                    if isinstance(msg.content, list):
+                        # Extract text from the content block list
+                        text_parts = [block.get('text', '') for block in msg.content if isinstance(block, dict)]
+                        extracted_contents.append(" ".join(text_parts))
+                    else:
+                        extracted_contents.append(str(msg.content))
+
+                tool_response = '\n'.join(extracted_contents)
 
                 # Prepare new messages
                 new_messages = [

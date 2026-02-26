@@ -104,8 +104,8 @@ def extract_conversation(conversation: dict, output_type: str):
         for msg in reversed(messages):
             finish_reason = get_nested(msg, ["response_metadata", "finish_reason"])
             content = get_field(msg, "content")
-            if finish_reason == "stop" and isinstance(content, str) and content.strip():
-                return content
+            if finish_reason == "STOP" and isinstance(content[0]['text'], str) and content[0]['text'].strip(): # gemini return
+                return content[0]['text']
 
         # Fallback: last AI-like message with non-empty content and not a tool call.
         for msg in reversed(messages):

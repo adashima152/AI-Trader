@@ -29,6 +29,38 @@ load_dotenv()
 
 from agent.base_agent.base_agent import BaseAgent
 
+def log_messages_to_file(today_date, data, filename="portfolio_logs.txt"):
+    with open(filename, "a", encoding="utf-8") as f:
+        f.write(f"{today_date}: \n")
+        for msg in data.get('messages', []):
+            # Log AIMessage Content
+            if msg.__class__.__name__ == 'AIMessage':
+                # AIMessage content can be a string or a list of dicts
+                if isinstance(msg.content, str):
+                    f.write(f"AI: {msg.content.strip()}\n")
+                elif isinstance(msg.content, list):
+                    for part in msg.content:
+                        if isinstance(part, dict) and 'text' in part:
+                            f.write(f"AI: {part['text'].strip()}\n")
+                
+                # Log Tool Calls within the AIMessage
+                if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        f.write(f"Tool Call - Function: {tc['name']}, Args: {tc['args']}\n")
+
+            # Log ToolMessage Content (Response from the tool)
+            elif msg.__class__.__name__ == 'ToolMessage':
+                # ToolMessage content can be a string or a list of dicts
+                if isinstance(msg.content, str):
+                    f.write(f"Tool Response: {msg.content.strip()}\n")
+                elif isinstance(msg.content, list):
+                    for part in msg.content:
+                        if isinstance(part, dict) and 'text' in part:
+                            f.write(f"Tool Response: {part['text'].strip()}\n")
+        
+        # Add an extra newline to separate log entries/sessions
+        f.write("-" * 20 + "\n")
+
 class BaseAgent_Hour(BaseAgent):
     """
     Trading agent for hour-level trading operations
@@ -81,49 +113,71 @@ class BaseAgent_Hour(BaseAgent):
         
         # Log initial message
         self._log_message(log_file, user_query)
-        
-        # Trading loop
-        current_step = 0
-        while current_step < self.max_steps:
-            current_step += 1
-            print(f"🔄 Step {current_step}/{self.max_steps}")
+
+        # --------------------------------------------------
+        response = await self._ainvoke_with_retry(message)
+        agent_response = extract_conversation(response, "final")
+        print("✅ Trading session ended")
+        print(agent_response)
+        self._log_message(log_file, [{"role": "assistant", "content": agent_response}])
+        log_messages_to_file(today_date, response)
+
+        # --------------------------------------------------
+        # # Trading loop
+        # current_step = 0
+        # while current_step < self.max_steps:
+        #     current_step += 1
+        #     print(f"🔄 Step {current_step}/{self.max_steps}")
             
-            try:
-                # Call agent
-                response = await self._ainvoke_with_retry(message)
+        #     try:
+        #         # Call agent
+        #         response = await self._ainvoke_with_retry(message)
                 
-                # Extract agent response
-                agent_response = extract_conversation(response, "final")
+        #         # Extract agent response
+        #         agent_response = extract_conversation(response, "final")
                 
-                # Check stop signal
-                if STOP_SIGNAL in agent_response:
-                    print("✅ Received stop signal, trading session ended")
-                    print(agent_response)
-                    self._log_message(log_file, [{"role": "assistant", "content": agent_response}])
-                    break
+        #         # Check stop signal
+        #         if STOP_SIGNAL in agent_response:
+        #             print("✅ Received stop signal, trading session ended")
+        #             print(agent_response)
+        #             self._log_message(log_file, [{"role": "assistant", "content": agent_response}])
+        #             break
                 
-                # Extract tool messages with None check
-                tool_msgs = extract_tool_messages(response)
-                tool_response = '\n'.join([msg.content for msg in tool_msgs if msg.content is not None])
+        #         # Extract tool messages with None check
+        #         tool_msgs = extract_tool_messages(response)
+        #         extracted_contents = []
+        #         for msg in tool_msgs:
+        #             if msg.content is None:
+        #                 continue
+                    
+        #             # Check if content is a list (new format) or a string (old format)
+        #             if isinstance(msg.content, list):
+        #                 # Extract text from the content block list
+        #                 text_parts = [block.get('text', '') for block in msg.content if isinstance(block, dict)]
+        #                 extracted_contents.append(" ".join(text_parts))
+        #             else:
+        #                 extracted_contents.append(str(msg.content))
+
+        #         tool_response = '\n'.join(extracted_contents)
                 
-                # Prepare new messages
-                new_messages = [
-                    {"role": "assistant", "content": agent_response},
-                    {"role": "user", "content": f'Tool results: {tool_response}'}
-                ]
+        #         # Prepare new messages
+        #         new_messages = [
+        #             {"role": "assistant", "content": agent_response},
+        #             {"role": "user", "content": f'Tool results: {tool_response}'}
+        #         ]
                 
-                # Add new messages
-                message.extend(new_messages)
+        #         # Add new messages
+        #         message.extend(new_messages)
                 
-                # Log messages
-                self._log_message(log_file, new_messages[0])
-                self._log_message(log_file, new_messages[1])
+        #         # Log messages
+        #         self._log_message(log_file, new_messages[0])
+        #         self._log_message(log_file, new_messages[1])
                 
-            except Exception as e:
-                print(f"❌ Trading session error: {str(e)}")
-                print(f"Error details: {e}")
-                raise
-        
+        #     except Exception as e:
+        #         print(f"❌ Trading session error: {str(e)}")
+        #         print(f"Error details: {e}")
+        #         raise
+        # ----------------------------------------------------------------
         # Handle trading results
         await self._handle_trading_result(today_date)
     
