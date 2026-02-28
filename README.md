@@ -57,7 +57,7 @@ AGENT_MAX_STEP=30             # Maximum reasoning steps
 pip install -r requirements.txt
 
 # Or manually install core dependencies
-pip install langchain langchain-openai langchain-mcp-adapters fastmcp python-dotenv requests numpy pandas tushare langchain_openai
+pip install langchain langchain-openai langchain-mcp-adapters fastmcp python-dotenv requests numpy pandas tushare langchain_google_genai
 ```
 
 ## 🎮 Running Guide
