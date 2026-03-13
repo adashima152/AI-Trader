@@ -1,3 +1,5 @@
+# Commits after Feb 28 are mistakely pushed. All codes are finished before it.
+
 ## Original Repo: [https://github.com/HKUDS/AI-Trader](https://github.com/HKUDS/AI-Trader)
 
 This repo foucs on the migrition and compatiability for Vertex API. Part of this repo inheirts from original one, but is not exactly executed if following the instruction below. Please find those instructions and detailed explaination in original `README.md` if you are interested.
