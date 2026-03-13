@@ -148,3 +148,4 @@ bash scripts/start_ui.sh
 
 This project is licensed under the [MIT License](LICENSE).
 
+# my-ai-trader
